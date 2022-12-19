@@ -1,0 +1,70 @@
+osword  EQU &FFF1
+osargs  EQU &FFDA
+osgbpb  EQU &FFD1
+osfind  EQU &FFCE
+lomem   EQU &00
+vartop  EQU &02
+        DSECT
+        ORG &70
+owzp    DS  5
+chan    DS  1
+ptr     DW  0
+        DEND
+
+fptmp   EQU &046C
+fpmag   EQU fptmp+4
+
+        ;; Beginning of code common to both SAVE and LOAD, i.e. parse
+        ;; the filename, including transferring across the tube if
+        ;; necessary.
+
+        LOAD start
+        EXEC start
+start   LDA #&01        ; Get the address of the command line tail
+        LDX #owzp
+        LDY #&00
+        JSR osargs
+fnlp    LDA #&05        ; Get what we hope is filename, compatible with the tube
+        LDX #>owzp
+        LDY #<owzp
+        JSR osword
+        LDA owzp+4
+fnpat   STA fname
+        CMP #&0D
+        BEQ endfn
+        INC fnpat+1
+        BNE fnskip
+        INC fnpat+2
+fnskip  INC owzp
+        BNE fnlp
+        INC owzp+1
+        BNE fnlp
+endfn   LDA fname       ; Check a filename has been given.
+        CMP #&0D
+        BNE fnok
+        BRK
+        DB   0
+        ASC  "Missing filename"
+        DB   0
+
+        ;; OSGBPB control block.  This is preset to save page four
+        ;; including the resident integer variables and the head
+        ;; pointers for the heap variables.  It is then later reset
+        ;; and re-used to save the heap.
+
+gbpbcb  DB  0
+        DW  &0400
+        DW  0
+        DW  &00F6
+        DW  0
+        DW  0
+        DW  0
+
+        ;; Magic text - this is put in page four in the floating
+        ;; point temporary area so it ends up in the file in a known
+        ;; place.
+
+magic   ASC "BBCBASVR"
+
+fnok    LDX #>fname     ; Load address of filename ready to open.
+        LDY #<fname

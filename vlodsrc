@@ -1,0 +1,215 @@
+        org &04BB
+        include parsfn  ; Parse the filename.
+
+        DSECT
+delta   DW  0
+next    DW  0
+dimcnt  DB  0
+cells   DW  0
+mult    DW  0
+result  DS  4
+scbptr  DW  0
+        DEND
+
+        LDA #&40        ; Open the file for writing
+        JSR osfind
+        CMP #&00
+        BNE opened
+        BRK
+        DB  0
+        ASC "Unable to open file"
+        DB  0
+opened  STA chan
+        STA gbpbcb
+        LDA #&04        ; Load most of page four from the file.
+        LDX #>gbpbcb
+        LDY #<gbpbcb
+        JSR osgbpb
+        BCS close
+        LDX #7          ; Check the "magic number" to ensure this is
+magloop LDA magic,X     ; a varianle dump file.
+        CMP fpmag,X
+        BNE notvars
+        DEX
+        BPL magloop
+        LDA lomem       ; reset the OSGBPB control block to load the
+        STA gbpbcb+1    ; the heap.
+        CLC
+        ADC fptmp+2     ; Calculate the new vartop to save re-loading
+        STA vartop      ; values.
+        LDA lomem+1
+        STA gbpbcb+2
+        ADC fptmp+3
+        STA vartop+1
+        LDA fptmp+2
+        STA gbpbcb+5
+        LDA fptmp+3
+        STA gbpbcb+6
+        LDA #&04        ; Load the heap from the file.
+        LDX #>gbpbcb
+        JSR osgbpb
+close   PHP             ; entered with carry set for error, clear for success.
+        LDA #&00        ; close the file.
+        LDY chan
+        JSR osfind
+        PLP             ; deal with any error.
+        BCC good
+ioerr   BRK
+        DB  0
+        ASC "I/O Error"
+        DB  0
+notvars BRK
+        DB  0
+        ASC "Not a variables file"
+        DB  0
+
+heads   EQU &0480
+headsz  EQU &76
+
+good    SEC             ; Calculate the difference between the old
+        LDA lomem       ; and new heap start.
+        SBC fptmp
+        STA  delta
+        LDA lomem+1
+        SBC fptmp+1
+        STA delta+1
+        LDX #&00        ; Step through each linked list.
+headlp  LDA heads+1,X
+        BNE entries     ; empty list indicated by zero MSB.
+nexth   INX             ; move to the next list.
+        INX
+        CPX #headsz
+        BNE headlp
+        RTS
+entries CLC             ; Process one linked list.
+        LDA heads,X
+        ADC delta       ; Adjust for new LOMEM.
+        STA heads,X
+        STA ptr
+        LDA heads+1,X
+        ADC delta+1
+        STA heads+1,X
+        STA ptr+1
+nextv   LDY #&01        ; Start with the name.
+nxtnam  INY             ; Check the name for a string variable.
+        LDA (ptr),Y
+        BEQ endnam      ; Reach end of name without '$' for string.
+        CMP #'$'
+        BNE nxtnam
+string  INY             ; Got a '$', is it an array?
+        LDA (ptr),Y
+        CMP #'('
+        BEQ strary      ; Yes, a string array.
+        INY
+
+        ;; Adjust a string control block but only if it points
+        ;; so some memory, i.e. it is not empty.
+
+adjscb  MACRO
+        INY
+        LDA (@1),Y     ; Get MSB of string data.
+        BEQ @2         ; empty string if zero.
+        CLC
+        DEY
+        LDA (@1),Y     ; Adjust LSB.
+        ADC delta
+        STA (@1),Y
+        INY             ; Adjust MSB.
+        LDA (@1),Y
+        ADC delta+1
+        STA (@1),Y
+        ENDM
+
+        adjscb ptr,endnam
+endnam  LDY #1
+        LDA (ptr),Y
+        BEQ nexth       ; Zero MSB means end of list.
+        CLC
+        DEY
+        LDA (ptr),Y     ; Get LSB of next pointer.
+        ADC delta       ; Adjust for new LOMEM.
+        STA (ptr),Y
+        STA next        ; Save as next pointer.
+        INY
+        LDA (ptr),Y     ; Same for MSB.
+        ADC delta+1
+        STA (ptr),Y
+        STA ptr+1
+        LDA next
+        STA ptr
+        JMP nextv
+strary  TXA
+        PHA
+        INY             ; Skip the name terminator.
+        INY
+        LDA (ptr),Y     ; Get the number of dimensions.
+        LSR A
+        TAX
+        INY             ; Get the first dimension.
+        LDA (ptr),Y
+        STA cells
+        INY
+        LDA (ptr),Y
+        STA cells+1
+        DEX             ; More than one dimension?
+        BEQ onedim
+        STX dimcnt      ; Save the dimension count.
+nxtdim  INY             ; Get the next dimension.
+        LDA (ptr),Y
+        STA mult
+        INY
+        LDA (ptr),Y
+        STA mult+1
+        LDA #0          ; 16 bit multiply between current cells and
+        STA result+3    ; the next dimension.
+        STA result+2
+        LDX #16
+mul1    LSR mult+1
+        ROR mult
+        BCC mul2
+        CLC
+        LDA cells
+        ADC result+2
+        STA result+2
+        LDA cells+1
+        ADC result+3
+        STA result+3
+mul2    ROR result+3
+        ROR result+2
+        ROR result+1
+        ROR result
+        DEX
+        BNE mul1
+        LDA result      ; Copy result into place.
+        STA cells
+        LDA result+1
+        STA cells+1
+        DEC dimcnt
+        BNE nxtdim      ; Continue to next dimension.
+onedim  TYA             ; Fold Y into SCB pointer.
+        CLC
+        ADC ptr
+        STA scbptr
+        LDA #0
+        ADC ptr+1
+        STA scbptr+1
+scblp   LDY #1          ; Adjust one SCB.
+        adjscb scbptr,strnul
+strnul  CLC             ; Move to next SCB
+        LDA #4
+        ADC scbptr
+        STA scbptr
+        BCC noinc
+        INC scbptr+1
+noinc   DEC cells
+        BNE scblp
+        LDA cells+1
+        BEQ rstptr
+        DEC cells+1
+        JMP scblp
+rstptr  PLA
+        TAX
+        JMP endnam      ; Always taken.
+fname
+
+

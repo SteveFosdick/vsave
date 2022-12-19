@@ -1,0 +1,56 @@
+        org &0600
+        include parsfn  ; Parse the filename.
+
+        LDA #&80        ; Open the file for writing
+        JSR osfind
+        CMP #&00
+        BNE opened
+        BRK
+        DB  0
+        ASC "Unable to open file"
+        DB  0
+opened  STA chan
+        STA gbpbcb
+        LDA lomem       ; Squirell away the existing value of LOMEM
+        STA fptmp
+        LDA lomem+1
+        STA fptmp+1
+        CLC
+        LDA vartop      ; and the length of the heap in page four
+        SBC lomem       ; where we will be saving that anyway.
+        STA fptmp+2
+        LDA vartop+1
+        SBC lomem+1
+        STA fptmp+3
+        LDX #8
+magloop LDA magic,X     ; Install a "magic number" to identify the
+        STA fpmag,X     ; file once saved.
+        DEX
+        BPL magloop
+        LDA #&02        ; Save most of page four to the file.
+        LDX #>gbpbcb
+        LDY #<gbpbcb
+        JSR osgbpb
+        BCS close
+        LDA lomem       ; reset the OSGBPB control block to save the
+        STA gbpbcb+1    ; the heap.
+        LDA lomem+1
+        STA gbpbcb+2
+        LDA fptmp+2
+        STA gbpbcb+5
+        LDA fptmp+3
+        STA gbpbcb+6
+        LDA #&02
+        JSR osgbpb
+close   PHP             ; entered with carry set for error, clear for success.
+        LDA #&00        ; close the file.
+        LDY chan
+        JSR osfind
+        PLP             ; deal with any error.
+        BCS ioerr
+        RTS
+ioerr   BRK
+        DB  0
+        ASC "I/O Error"
+        DB  0
+fname                   ; Filename is stored here.
