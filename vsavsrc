@@ -15,7 +15,7 @@ opened  STA chan
         STA fptmp
         LDA lomem+1
         STA fptmp+1
-        CLC
+        SEC
         LDA vartop      ; and the length of the heap in page four
         SBC lomem       ; where we will be saving that anyway.
         STA fptmp+2
