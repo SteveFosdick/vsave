@@ -1,4 +1,5 @@
-        org &04BB
+        org &04B1
+loading equ 1
         include parsfn  ; Parse the filename.
 
         DSECT

@@ -47,6 +47,10 @@ endfn   LDA fname       ; Check a filename has been given.
         ASC  "Missing filename"
         DB   0
 
+        IF  loading
+        DS  &A
+        FI
+
         ;; OSGBPB control block.  This is preset to save page four
         ;; including the resident integer variables and the head
         ;; pointers for the heap variables.  It is then later reset

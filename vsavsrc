@@ -1,4 +1,5 @@
         org &0600
+loading equ 0
         include parsfn  ; Parse the filename.
 
         LDA #&80        ; Open the file for writing
