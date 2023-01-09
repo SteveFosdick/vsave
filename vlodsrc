@@ -6,6 +6,7 @@ loading equ 1
 delta   DW  0
 next    DW  0
 dimcnt  DB  0
+offset  DB  0
 cells   DW  0
 mult    DW  0
 result  DS  4
@@ -161,30 +162,27 @@ nxtdim  INY             ; Get the next dimension.
         INY
         LDA (ptr),Y
         STA mult+1
-        LDA #0          ; 16 bit multiply between current cells and
-        STA result+3    ; the next dimension.
-        STA result+2
-        LDX #16
+        STY offset
+        LDX #0          ; 16 bit multiply between current cells and
+        LDY #0          ; the next dimension.
 mul1    LSR mult+1
         ROR mult
         BCC mul2
         CLC
-        LDA cells
-        ADC result+2
-        STA result+2
-        LDA cells+1
-        ADC result+3
-        STA result+3
-mul2    ROR result+3
-        ROR result+2
-        ROR result+1
-        ROR result
-        DEX
+        TYA
+        ADC cells
+        TAY
+        TXA
+        ADC cells+1
+        TAX
+mul2    ASL cells
+        ROL cells+1
+        LDA mult
+        ORA mult+1
         BNE mul1
-        LDA result      ; Copy result into place.
-        STA cells
-        LDA result+1
-        STA cells+1
+        STY cells       ; Copy result into place.
+        STX cells+1
+        LDY offset
         DEC dimcnt
         BNE nxtdim      ; Continue to next dimension.
 onedim  TYA             ; Fold Y into SCB pointer.
@@ -212,5 +210,3 @@ rstptr  PLA
         TAX
         JMP endnam      ; Always taken.
 fname
-
-
