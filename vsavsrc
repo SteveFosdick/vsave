@@ -7,12 +7,12 @@ loading equ 0
         CMP #&00
         BNE opened
         BRK
-        DB  0
-        ASC "Unable to open file"
+        DB  192
+        ASC "Can't save file"
         DB  0
 opened  STA chan
         STA gbpbcb
-        LDA lomem       ; Squirell away the existing value of LOMEM
+        LDA lomem       ; Squirrel away the existing value of LOMEM
         STA fptmp
         LDA lomem+1
         STA fptmp+1

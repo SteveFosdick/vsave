@@ -13,13 +13,13 @@ result  DS  4
 scbptr  DW  0
         DEND
 
-        LDA #&40        ; Open the file for writing
+        LDA #&40        ; Open the file for reading.
         JSR osfind
         CMP #&00
         BNE opened
         BRK
-        DB  0
-        ASC "Unable to open file"
+        DB  214
+        ASC "Can't load file"
         DB  0
 opened  STA chan
         STA gbpbcb
@@ -57,11 +57,11 @@ close   PHP             ; entered with carry set for error, clear for success.
         PLP             ; deal with any error.
         BCC good
 ioerr   BRK
-        DB  0
-        ASC "I/O Error"
+        DB  223
+        ASC "Unexpected EOF"
         DB  0
 notvars BRK
-        DB  0
+        DB  225
         ASC "Not a variables file"
         DB  0
 
